@@ -260,18 +260,29 @@ def lsdWrap(img, LSD=None, **kwargs):
         is used to construct LSD
         work only if @LSD is not given
     '''
-    if LSD is None:
+    if cv2.__version__ <= '3.1.0.5':
         LSD = cv2.createLineSegmentDetector(**kwargs)
-
+    elif cv2.__version__ >= '4.0.0':
+        LSD = cv2.ximgproc.createFastLineDetector(**kwargs)
+    else:
+        raise Exception("Use cv2==3.1.0.5 or cv2>=4.0.0")
+    
     if len(img.shape) == 3:
         img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-
-    lines, width, prec, nfa = LSD.detect(img)
+    
+    if cv2.__version__ <= '3.1.0.5':
+        lines, width, prec, nfa = LSD.detect(img)
+    elif cv2.__version__ >= '4.0.0':
+        lines = LSD.detect(img)
+    
     if lines is None:
         return np.zeros_like(img), np.array([])
     edgeMap = LSD.drawSegments(np.zeros_like(img), lines)[..., -1]
     lines = np.squeeze(lines, 1)
-    edgeList = np.concatenate([lines, width, prec, nfa], 1)
+    if cv2.__version__ <= '3.1.0.5':
+        edgeList = np.concatenate([lines, width, prec, nfa], 1)
+    elif cv2.__version__ >= '4.0.0':
+        edgeList = np.concatenate([lines], 1)
     return edgeMap, edgeList
 
 
@@ -831,7 +842,12 @@ def panoEdgeDetection(img, viewSize=320, qError=0.7, refineIter=3):
 
     sepScene = separatePano(img.copy(), fov, x, y, cutSize)
     edge = []
-    LSD = cv2.createLineSegmentDetector(_refine=cv2.LSD_REFINE_ADV, _quant=qError)
+    
+    if cv2.__version__ <= '3.1.0.5':
+        LSD = cv2.createLineSegmentDetector(_refine=cv2.LSD_REFINE_ADV, _quant=qError)
+    elif cv2.__version__ >= '4.0.0':
+        LSD = cv2.ximgproc.createFastLineDetector()
+  
     for i, scene in enumerate(sepScene):
         edgeMap, edgeList = lsdWrap(scene['img'], LSD)
         edge.append({
