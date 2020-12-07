@@ -34,9 +34,9 @@ class Equi2Equi(BaseEqui2Equi):
         '''
 
         xs = torch.linspace(1, w_out, w_out)
-        theta = -(xs - w_out / 2 - 0.5) / w_out * np.pi * 2
+        theta = (xs - (w_out / 2 + 0.5)) * (2 * np.pi / w_out)
         ys = torch.linspace(1, h_out, h_out)
-        phi = -(ys - h_out / 2 - 0.5) / h_out * np.pi
+        phi  = -(ys - (h_out / 2 + 0.5)) * (np.pi / h_out)
 
         # NOTE: https://github.com/pytorch/pytorch/issues/15301
         # Torch meshgrid behaves differently than numpy
@@ -121,11 +121,11 @@ class Equi2Equi(BaseEqui2Equi):
         B = []
         for r in rot:
             a = self.create_coordinate(self.h_out, self.w_out)
-            norm_A = 1
-            x = norm_A * torch.cos(a[:, :, 1]) * torch.sin(a[:, :, 0])
-            y = norm_A * torch.cos(a[:, :, 1]) * torch.cos(a[:, :, 0])
-            z = norm_A * torch.sin(a[:, :, 1])
-            A = torch.stack((y, x, z), dim=-1)
+            #norm_A = 1
+            x = torch.cos(a[:, :, 1]) * torch.sin(a[:, :, 0])
+            y = torch.cos(a[:, :, 1]) * torch.cos(a[:, :, 0])
+            z = torch.sin(a[:, :, 1])
+            A = torch.stack((x, y, z), dim=-1)
             #R = self.rotation_matrix(**r)
             #_B = R @ A.unsqueeze(3)
             #_B = _B.squeeze(3)
@@ -137,7 +137,7 @@ class Equi2Equi(BaseEqui2Equi):
             _x, LU = torch.solve(xyzNew.T, R)
             _B =  _x.T
             _B = _B.reshape(h_equi, w_equi, 3)
-            B.append(torch.Tensor(_B))
+            B.append(_B)
 
         B = torch.stack(B, dim=0).to(device)
 
@@ -150,13 +150,14 @@ class Equi2Equi(BaseEqui2Equi):
         normXY[normXY < 0.000001] = 0.000001
         theta = torch.asin( B[:, :, :,0] / normXY)
 
-        valid = (B[:, :, :, 1] < 0) & (theta >= 0)
+        negativeY = (B[:, :, :, 1] < 0)
+        valid = negativeY & (theta >= 0)
         theta[valid] = np.pi - theta[valid]
-        valid = (B[:, :, :, 1] < 0) & (theta <= 0)
+        valid = negativeY & (theta <= 0)
         theta[valid] = -np.pi - theta[valid]
 
-        ui = (theta + np.pi) / (2 * np.pi) * w_equi + 0.5
-        uj = (-phi + np.pi / 2) / np.pi * h_equi + 0.5
+        ui = (theta +  np.pi) * (w_equi / (2 * np.pi)) + 0.5
+        uj = (-phi + np.pi/2) * (h_equi / np.pi) + 0.5
 
         # center the image and convert to pixel locatio
         #ui = (theta - math.pi) * w_equi / (2 * math.pi)
