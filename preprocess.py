@@ -29,6 +29,7 @@ import cv2
 from typing import Union
 from torchvision import transforms
 from equilib.equi2equi import TorchEqui2Equi
+import multiprocessing as mp
 
 def preprocess(
     img: Union[np.ndarray, Image.Image],
@@ -101,35 +102,7 @@ def rotationMatrixToEulerAngles(R) :
 
     return np.array([x, y, z])
 
-t_start = time.time()
-
-parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
-# I/O related arguments
-parser.add_argument('--img_glob', required=True,
-                    help='NOTE: Remeber to quote your glob path.')
-parser.add_argument('--output_dir', required=True)
-parser.add_argument('--rgbonly', action='store_true',
-                    help='Add this if use are preparing customer dataset')
-# Preprocessing related arguments
-parser.add_argument('--q_error', default=0.7, type=float)
-parser.add_argument('--refine_iter', default=3, type=int)
-args = parser.parse_args()
-
-paths = sorted(glob.glob(args.img_glob))
-if len(paths) == 0:
-    print('no images found')
-
-# Check given path exist
-for path in paths:
-    assert os.path.isfile(path), '%s not found' % path
-
-# Check target directory
-if not os.path.isdir(args.output_dir):
-    print('Output directory %s not existed. Create one.')
-    os.makedirs(args.output_dir)
-
-# Process each input
-for i_path in paths:
+def align(i_path):
     print('Processing', i_path, flush=True)
 
     # Load and cat input images
@@ -185,4 +158,47 @@ for i_path in paths:
         Image.fromarray((i_img * 255).astype(np.uint8)).save(path_i_img)
         #Image.fromarray((l_img * 255).astype(np.uint8)).save(path_l_img)
 
-print('time spent: {}'.format(time.time() - t_start))
+
+# global 
+parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
+# I/O related arguments
+parser.add_argument('--img_glob', required=True,
+                    help='NOTE: Remeber to quote your glob path.')
+parser.add_argument('--output_dir', required=True)
+parser.add_argument('--rgbonly', action='store_true',
+                    help='Add this if use are preparing customer dataset')
+# Preprocessing related arguments
+parser.add_argument('--q_error', default=0.7, type=float)
+parser.add_argument('--refine_iter', default=3, type=int)
+args = parser.parse_args()
+
+if __name__ == '__main__':
+    #freeze_support()
+
+    paths = sorted(glob.glob(args.img_glob))
+    if len(paths) == 0:
+        print('no images found')
+
+    # Check given path exist
+    for path in paths:
+        assert os.path.isfile(path), '%s not found' % path
+
+    # Check target directory
+    if not os.path.isdir(args.output_dir):
+        print('Output directory %s not existed. Create one.')
+        os.makedirs(args.output_dir)
+    
+    num_processor = mp.cpu_count()
+    print("Number of processors: ", num_processor)
+    
+    t_start = time.time()
+    
+    # Process each input
+    #for i_path in paths:
+    #    args.path = i_path
+    #    align(args)
+    pool = mp.Pool(processes=num_processor)
+    result = pool.map(align, paths)
+    pool.close()
+    
+    print('time spent: {}'.format(time.time() - t_start))
